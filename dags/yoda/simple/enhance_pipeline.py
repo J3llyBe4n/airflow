@@ -11,12 +11,14 @@ default_args = {
 
 #dag = DAG('pipeline_dag', default_args= default_args, schedule_interval = '*/1 * * * *')
 
-dag = DAG('pipeline_dag', default_args= default_args, schedule_interval = '0 0 * * *')
+dag = DAG('enhance_pipeline_dag', default_args= default_args, schedule_interval = '*/1 * * * *')
 
 first = EmptyOperator(
 	task_id='start',
 	dag = dag
 )
+
+first
 
 # ssh 1호기 연결 bash 
 # ssh 1호기 데이터 긁어서 worker_node datas에 적재 
