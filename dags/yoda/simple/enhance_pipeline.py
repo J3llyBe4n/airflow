@@ -6,13 +6,12 @@ from datetime import datetime
 default_args = {
     'owner': 'yoda.jedi',
     'depends_on_past' : False,
-    'start_date': datetime(2023, 5, 22),
+    'start_date': datetime(2023, 1, 1),
 }
-
 
 #dag = DAG('pipeline_dag', default_args= default_args, schedule_interval = '*/1 * * * *')
 
-dag = DAG('enhance_pipeline_dag', default_args= default_args, schedule_interval = '1 12 * * *')
+dag = DAG('enhance_pipeline_dag', default_args= default_args, schedule_interval = '0 5 * * *')
 
 first = EmptyOperator(
 	task_id='start',
@@ -118,15 +117,31 @@ install_s3_cli = BashOperator(
     task_id = 's3_install',
     bash_command ="pip install awscli",
     dag = dag
+) 
+
+load_dataLake = BashOperator(
+    task_id='load_toS3',
+    bash_command="""
+        aws s3 cp /opt/airflow/dags/data/SUM.log s3://pd24/yoda/{{ds_nodash}}/SUM.log;
+        aws s3 cp /opt/airflow/dags/data/RAW.log \
+        s3://pd24/yoda/{{execution_date.day}}/{{execution_date.month}}/{{execution_date.year}}/RAW.log
+    """,
+    dag=dag
 )
 
+done_flag = BashOperator(
+    task_id = 'send_doneFlag',
+    bash_command = """
+        echo > /opt/airflow/dags/data/DONE;
+        aws s3 cp /opt/airflow/dags/data/DONE s3://pd24/yoda/DONE/{{ds_nodash}}/_DONE
+    """,
+    dag = dag
+)
 
 first >> [get_data, install_s3_cli]
 get_data >> make_line_log >>load_logline >> cal_add >> filter_first >> filter_second >> filter_third
 filter_third >> filter_fourth >> summary_data >> delete_tmp 
-[install_s3_cli, delete_tmp] >>end
-
-
+[install_s3_cli, delete_tmp] >> load_dataLake >> done_flag >> end
 
 # ssh 1호기 연결 bash -> v
 # ssh 1호기 데이터 긁어서 worker_node datas에 적재 -> v

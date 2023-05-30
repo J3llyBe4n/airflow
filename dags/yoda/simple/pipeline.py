@@ -18,6 +18,12 @@ first = EmptyOperator(
 	dag = dag
 )
 
+first_alarm = BashOperator(
+	task_id = 'start_alarm',
+	bash_command = "curl -X POST -H 'Authorization: Bearer o5bKjcwyPcbj0rK30IroxMTPa7vp8YRXWJCpSIfSQCV' -F '\nmessage= \n DAG이름 : {{dag.dag_id}}  Operator이름 : {{task.task_id}} 시작!' https://notify-api.line.me/api/notify",
+	dag = dag
+)
+
 load_data = BashOperator(
 	task_id = 'load_sample_data',
     bash_command="""
@@ -56,4 +62,4 @@ last = EmptyOperator(
 	dag = dag
 )
 
-first >> load_data >> filtering_first >> filtering_second >> summary_task >>last
+first >> first_alarm >> load_data >> filtering_first >> filtering_second >> summary_task >>last
