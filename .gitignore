@@ -1,3 +1,2 @@
 *.pem
-/Users/jesse/Documents/yoda/dags/hive/yoda/__pycache__
-/Users/jesse/Documents/yoda/dags/yoda/simple/__pycache__
+**/__pycache__/
