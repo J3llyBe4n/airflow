@@ -11,3 +11,4 @@
 [hive_yoda] 
 
 first task set 해결해보기 
+parquet 변환을 제외한 모든 task를 완료하였따
