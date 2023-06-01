@@ -28,7 +28,6 @@ check_data = BashOperator(
 	bash_command="""
         if aws s3 ls s3://{{ var.value.STORAGE_PATH }}stock/0068001.csv; then
             echo "file_exist"
-            aws s3 cp s3://pd24/yoda/data/stock/006800.csv /opt/airflow/stock/
             exit 0
         else
             echo "file_!exist"
@@ -38,6 +37,12 @@ check_data = BashOperator(
 	dag = dag
 )
 
+load_toLocal = BashOperator(
+	task_id = 'loadData_to_worker',
+	bash_command = "aws s3 cp s3://pd24/yoda/data/stock/006800.csv /opt/airflow/stock/",
+	dag = dag
+)
 
 
-first >> check_data >>finish
+
+first >> check_data >> load_toLocal >>finish
