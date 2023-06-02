@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import BranchPythonOperator
 from airflow.models.variable import Variable
 from datetime import datetime
 
@@ -12,6 +13,13 @@ default_args = {
 
 dag = DAG('stock_pipeline', default_args = default_args, schedule_interval = '@once')
 
+def check_hdfs_result(**kwargs):
+    result = kwargs['ti'].xcom_pull(task_ids='check_data_onHDFS')
+    if result == "file exist":
+        return 'skip_load_hdfs'
+    else:
+        return 'load_hdfs'
+
 first = EmptyOperator(
 	task_id = 'start_task',
 	dag = dag
@@ -19,6 +27,7 @@ first = EmptyOperator(
 
 finish = EmptyOperator(
 	task_id = 'finish_task',
+	trigger_rule = 'all_done',
 	dag = dag
 )
 
@@ -60,8 +69,36 @@ load_hdfs = BashOperator(
 	dag = dag
 )
 
+check_hdfsData = BashOperator(
+	task_id = 'check_data_onHDFS',
+	bash_command="""
+        if ssh {{var.value.HADOOP_SERVER_IP}} {{var.value.HDFS_CMD}}hdfs dfs \
+        -ls /user/yoda/hive/stock_pipe/006800.csv >/dev/null 2>&1; then
+            echo "file exist"
+            exit 0
+        else
+            echo "file not exist!"
+            exit 0
+        fi
+    """,
+	dag = dag
+)
+
+check_hdfsData_result = BranchPythonOperator(
+	task_id='check_hdfsData_result',
+	provide_context=True,
+	python_callable=check_hdfs_result,
+	dag=dag
+)
+
+skip_load_hdfs = EmptyOperator(
+    task_id='skip_load_hdfs',
+    dag=dag
+)
+
 create_hive_table = BashOperator(
 	task_id = 'create_table',
+	trigger_rule = 'all_done',
 	bash_command = """
 		ssh {{var.value.HADOOP_SERVER_IP}} {{var.value.HIVE_CMD}} -f /home/yoda/hive/query/pipe.hql
 	""",
@@ -79,7 +116,18 @@ send_noti = BashOperator(
 	dag = dag
 )
 
-first >> check_data >> load_toLocal >> move_tmpData >> load_hdfs >> create_hive_table
-create_hive_table >> [send_noti, finish]
+delete_tmp = BashOperator(
+	task_id = 'delete_tmpData',
+	bash_command = """
+		rm -rf /opt/airflow/stock/006800.csv;
+		ssh {{var.value.HADOOP_SERVER_IP}} rm -rf /home/yoda/data/tmp/006800.csv
+	""",
+	dag =dag
+
+)
+
+first >> check_data >> load_toLocal >> move_tmpData >> check_hdfsData 
+check_hdfsData >> check_hdfsData_result >> [skip_load_hdfs, load_hdfs] >> create_hive_table
+create_hive_table >> [send_noti, delete_tmp] >> finish
 
 
